@@ -1,0 +1,1 @@
+{"DATASET": "MNIST", "N_EPOCHS": 10, "N_DROP_LR": 10, "DROP_LR_FACTOR": 0.5, "path": "./data/MultiMNIST/", "BATCH_SIZE": 256, "N_experiments": 1, "group": "DEBUG", "WANDB_NAME": "fbs_project", "methods": [["MGDA", "dp", 1.0, 0.1], ["MGDA", "dz", 1.0, 0.1], ["MGDA", "dz", 0.1, -1.0], ["MGDA", "dp", 0.1, -1.0]], "entity": "fm_team"}
