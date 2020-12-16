@@ -197,6 +197,14 @@ def get_int(b):
 
 
 def read_label_file(path, extension):
+    """
+    Args:
+        path: path to label file
+        extension: format of file
+
+    Returns:
+
+    """
     with open(path, 'rb') as f:
         data = f.read()
         assert get_int(data[:4]) == 2049
@@ -213,6 +221,12 @@ def read_label_file(path, extension):
 
 
 def read_image_file(path):
+    """
+    Args:
+        path: path to image
+    Returns:
+
+    """
     with open(path, 'rb') as f:
         data = f.read()
         assert get_int(data[:4]) == 2051
@@ -251,10 +265,16 @@ def read_image_file(path):
 
 
 def global_transformer():
+    """
+    Transformations
+    """
     return transforms.Compose([transforms.ToTensor(),
                                transforms.Normalize((0.1307,), (0.3081,))])
 
 class CustomDataset(data.Dataset):
+    """
+    Dataset for CIFAR10 experiment
+    """
     def __init__(self, data, labels):
         self.data = data
         self.labels = labels
@@ -266,6 +286,9 @@ class CustomDataset(data.Dataset):
         return len(self.labels)
 
 class CIFAR10Loader():
+    """
+    Loader for CIFAR10
+    """
     def __init__(self, root, train=True):
         transform = torchvision.transforms.Compose(
             [torchvision.transforms.ToTensor(),

@@ -2,6 +2,9 @@ import torch
 import numpy as np
 
 class MinNormSolver():
+    """
+    Solver for Minimum simplex norm problem
+    """
     MAX_ITER = 250
     STOP_CRIT = 1e-5
 
@@ -101,6 +104,15 @@ class MinNormSolver():
 
 
 def gradient_normalization(normalization_type, grads):
+    """
+
+    Args:
+        normalization_type: l1 or l2
+        grads: tuple of task grddients
+
+    Returns:
+
+    """
     gn = {}
     grads = grads.copy()
     if normalization_type == 'l2':
@@ -115,6 +127,15 @@ def gradient_normalization(normalization_type, grads):
 
 
 def change_gradient(method, grads):
+    """
+
+    Args:
+        method: MGDA or EDM
+        grads: tuple of task gradients
+
+    Returns:
+
+    """
     # grads1, grads2 = grads
     # g1 = torch.nn.utils.parameters_to_vector(grads1)
     # g2 = torch.nn.utils.parameters_to_vector(grads2)

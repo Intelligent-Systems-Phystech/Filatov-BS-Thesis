@@ -15,6 +15,9 @@ model_urls = {
 }
 
 class MultiLeNetEnc(nn.Module):
+    """
+    Le-Net-5 Encoder
+    """
     def __init__(self):
         super(MultiLeNetEnc, self).__init__()
         self.conv1 = nn.Conv2d(1, 10, kernel_size=5)
@@ -33,6 +36,9 @@ class MultiLeNetEnc(nn.Module):
 
 
 class MultiLeNetDec(nn.Module):
+    """
+    Le-Net Decoder
+    """
     def __init__(self):
         super(MultiLeNetDec, self).__init__()
         self.fc1 = nn.Linear(50, 50)
@@ -46,6 +52,9 @@ class MultiLeNetDec(nn.Module):
         return F.log_softmax(x, dim=1)
 
 class MultiDec(nn.Module):
+    """
+    Decoder for CIFAR10
+    """
     def __init__(self):
         super(MultiDec, self).__init__()
         self.linear1 = nn.Linear(512, 256)
@@ -57,6 +66,9 @@ class MultiDec(nn.Module):
         return x
 
 class BasicBlock(nn.Module):
+    """
+    Res-Net Basic block
+    """
     expansion = 1
 
     def __init__(self, in_planes, planes, stride=1):
@@ -84,6 +96,9 @@ class BasicBlock(nn.Module):
         return out
 
 class ResNetCIFAR(nn.Module):
+    """
+    Res-Net-18 for CIFAR10
+    """
     def __init__(self, block, num_blocks):
         super(ResNetCIFAR, self).__init__()
         self.in_planes = 64
@@ -115,6 +130,9 @@ class ResNetCIFAR(nn.Module):
         return out
 
 class Bottleneck(nn.Module):
+    """
+    Bottleneck for Res-Net
+    """
     expansion = 4
 
     def __init__(self, inplanes, planes, stride=1, downsample=None):

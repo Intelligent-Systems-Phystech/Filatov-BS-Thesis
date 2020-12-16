@@ -12,6 +12,14 @@ from utils import step_norm, step_zero, backtracking, set_seed, calculate_produc
 from methods import change_gradient
 
 def train(params):
+    """
+    Perform training procedure
+    Args:
+        params: parameters of training
+
+    Returns:
+
+    """
     DATASET = params["DATASET"]
     BATCH_SIZE = params["BATCH_SIZE"]
     N_experiments = params["N_experiments"]

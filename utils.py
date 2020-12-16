@@ -8,6 +8,15 @@ import torch.nn.functional as F
 
 
 def set_seed(seed):
+    """
+    Set reproducibility
+
+    Args:
+        seed:
+
+    Returns:
+
+    """
     torch.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
     torch.backends.cudnn.deterministic = True
@@ -18,6 +27,17 @@ def set_seed(seed):
 
 
 def get_models(params, list_encoders, list_decoders, device):
+    """
+    Initialize neural network modules
+    Args:
+        params:
+        list_encoders:
+        list_decoders:
+        device:
+
+    Returns:
+    Initialized models
+    """
     encoders, decoders = {}, {}
     if params['single_task'] == True:
         for i in range(len(list_encoders)):
@@ -34,6 +54,15 @@ def get_models(params, list_encoders, list_decoders, device):
     return encoders, decoders
 
 def apply_encoders(images, encoders):
+    """
+    Apply encoder to input images
+    Args:
+        images:
+        encoders:
+
+    Returns:
+
+    """
     enc_outputs = []
     for e in encoders:
         Z = encoders[e](images)
@@ -42,6 +71,17 @@ def apply_encoders(images, encoders):
 
 
 def apply_decoders(decoders, enc_outputs, GRADIENT, train=True):
+    """
+    Apply decoder for latent space
+    Args:
+        decoders:
+        enc_outputs:
+        GRADIENT:
+        train:
+
+    Returns:
+
+    """
     outputs = []
     t_outputs = []
     first_calculation = 0
@@ -73,7 +113,9 @@ def apply_decoders(decoders, enc_outputs, GRADIENT, train=True):
 def backtracking(losses, images, encoders, decoders, criterions,
                  new_grads, enc_output, trues, t, GRADIENT, BETA,
                  total_norms1, total_norms2):
-
+    """
+    Implement backtracking procedure
+    """
     with torch.no_grad():
         if GRADIENT == "dz":
             new_grads = new_grads[0]
@@ -111,6 +153,15 @@ def backtracking(losses, images, encoders, decoders, criterions,
 
 
 def step_norm(decoders, LEARNING_RATE):
+    """
+    Do gradient step and calculate norm of gradient
+    Args:
+        decoders:
+        LEARNING_RATE:
+
+    Returns:
+
+    """
     total_norms = []
     for d in decoders:
         total_norm = 0.0
@@ -123,6 +174,15 @@ def step_norm(decoders, LEARNING_RATE):
     return np.array(total_norms)
 
 def calculate_product(grads, new_grad):
+    """
+    Calculating scalar product between task gradients and minimizing direction
+    Args:
+        grads:
+        new_grad:
+
+    Returns:
+
+    """
     size = len(grads)
     scalar = new_grad[0].new_zeros(size=(size,))
     for i in range(size):
@@ -132,6 +192,19 @@ def calculate_product(grads, new_grad):
     return scalar
 
 def step_zero(decoders, encoders, step_size, GRADIENT, BACKTRACKING, grads):
+    """
+    encoder gradient update
+    Args:
+        decoders:
+        encoders:
+        step_size:
+        GRADIENT:
+        BACKTRACKING:
+        grads:
+
+    Returns:
+
+    """
     if GRADIENT == "dz":
         for i_par, parameter in enumerate(encoders['enc'].parameters()):
             if parameter.grad is not None:
@@ -157,6 +230,16 @@ def step_zero(decoders, encoders, step_size, GRADIENT, BACKTRACKING, grads):
 
 
 def calculate_losses(criterions, outputs, trues):
+    """
+    Calculating task losses
+    Args:
+        criterions:
+        outputs:
+        trues:
+
+    Returns:
+
+    """
     losses = []
     for i, criterion in enumerate(criterions):
         loss = criterion(outputs[i], trues[i])
@@ -165,7 +248,17 @@ def calculate_losses(criterions, outputs, trues):
 
 
 def calculate_predictions(outputs, trues, n, acc):
+    """
+    Calculating task predictions
+    Args:
+        outputs:
+        trues:
+        n:
+        acc:
 
+    Returns:
+
+    """
     for i, _ in enumerate(outputs):
         predictions = outputs[i].data.max(1, keepdim=True)[1]
         acc[i] += predictions.eq(trues[i].data.view_as(predictions)).cpu().sum()

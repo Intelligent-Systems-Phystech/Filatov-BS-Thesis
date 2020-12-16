@@ -10,6 +10,21 @@ from loaders import Compose, RandomRotate, RandomHorizontallyFlip, global_transf
 from loaders import MNIST, CITYSCAPES, CIFAR10Loader
 
 def set_task(DATASET, BATCH_SIZE, path, N_WORKERS):
+    """
+    Setting task parameters
+    Args:
+        DATASET: Dataset name
+        BATCH_SIZE: training batch size
+        path: path to dataset
+        N_WORKERS: num workers
+
+    Returns:
+    train_loader - loader for training set
+    val_loader - loader for validation set
+    criterions - loss functions
+    list_of_encoders - encoder models
+    list_of_decoders - decoder models
+    """
     set_seed(999)
     if DATASET == "CIFAR-10":
         train_dst = CIFAR10Loader(root=path, train=True)
@@ -55,6 +70,14 @@ def set_task(DATASET, BATCH_SIZE, path, N_WORKERS):
 
 
 def init_wandb_log(method, i_seed, group, params):
+    """
+    Initializing parameters for wandb logging
+    Args:
+        method: method for finding optimal direction
+        i_seed: seed of experiment
+        group: experiment group
+        params: dictionary with all parameters
+    """
     WANDB_NAME, N_EPOCHS, N_DROP_LR = params["WANDB_NAME"], params["N_EPOCHS"], params["N_DROP_LR"]
     DROP_LR_FACTOR, BATCH_SIZE, BETA = params["DROP_LR_FACTOR"], params["BATCH_SIZE"], params["BETA"]
     DATASET, LEARNING_RATE_IN, GRADIENT = params["LEARNING_RATE_IN"], params["GRADIENT"], params["DATASET"]
