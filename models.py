@@ -18,20 +18,30 @@ class MultiLeNetEnc(nn.Module):
     """
     Le-Net-5 Encoder
     """
-    def __init__(self):
-        super(MultiLeNetEnc, self).__init__()
+    def __init__(self, use_norm=True):
+        super().__init__()
         self.conv1 = nn.Conv2d(1, 10, kernel_size=5)
         self.conv2 = nn.Conv2d(10, 20, kernel_size=5)
         self.dropout = nn.Dropout2d(p=0.2)
         self.fc = nn.Linear(320, 50)
+        self.bn1 = nn.BatchNorm2d(10)
+        self.bn2 = nn.BatchNorm2d(20)
+        self.bn3 = nn.BatchNorm1d(50)
+        self.use_norm = use_norm
 
     def forward(self, x):
         x = F.relu(F.max_pool2d(self.conv1(x), 2))
+        if self.use_norm:
+            x = self.bn1(x)
         x = self.conv2(x)
         x = self.dropout(x)
         x = F.relu(F.max_pool2d(x, 2))
+        if self.use_norm:
+            x = self.bn2(x)
         x = x.view(-1, 320)
         x = F.relu(self.fc(x))
+        if self.use_norm:
+            x = self.bn3(x)
         return x
 
 
@@ -40,7 +50,7 @@ class MultiLeNetDec(nn.Module):
     Le-Net Decoder
     """
     def __init__(self):
-        super(MultiLeNetDec, self).__init__()
+        super().__init__()
         self.fc1 = nn.Linear(50, 50)
         self.fc2 = nn.Linear(50, 10)
         self.dropout = nn.Dropout2d(p=0.2)
