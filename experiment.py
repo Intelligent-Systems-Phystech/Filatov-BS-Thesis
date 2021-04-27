@@ -80,7 +80,7 @@ def init_wandb_log(method, i_seed, group, params):
     """
     WANDB_NAME, N_EPOCHS, N_DROP_LR = params["WANDB_NAME"], params["N_EPOCHS"], params["N_DROP_LR"]
     DROP_LR_FACTOR, BATCH_SIZE, BETA = params["DROP_LR_FACTOR"], params["BATCH_SIZE"], params["BETA"]
-    DATASET, LEARNING_RATE_IN, GRADIENT = params["LEARNING_RATE_IN"], params["GRADIENT"], params["DATASET"]
+    DATASET, LEARNING_RATE_IN, GRADIENT = params["DATASET"], params["LEARNING_RATE_IN"], params["GRADIENT"]
     entity = params["entity"]
     wandb.init(entity=entity, project=WANDB_NAME, name=method, group=group)
     wandb.config.n_epochs       = N_EPOCHS
