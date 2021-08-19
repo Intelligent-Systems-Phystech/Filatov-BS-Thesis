@@ -1,15 +1,17 @@
-import torch
-import numpy as np
-import wandb
 import json
+import numpy as np
 import os
-
+import torch
+import wandb
 from argparse import ArgumentParser
 from tqdm import tqdm
+
 from experiment import set_task, init_wandb_log
-from utils import get_models, apply_decoders, apply_encoders, calculate_losses, calculate_predictions, binary_acc
-from utils import step_norm, step_zero, backtracking, set_seed, calculate_product
-from methods import change_gradient
+from mgda import change_gradient
+from models import get_models, apply_decoders, apply_encoders
+from utils import calculate_losses, calculate_predictions, binary_acc, \
+    step_norm, step_zero, backtracking, set_seed, calculate_product
+
 
 def train(params):
     """
@@ -17,7 +19,7 @@ def train(params):
     Args:
         params: parameters of training
 
-    Returns:
+    Returns: None
 
     """
     DATASET = params["DATASET"]
@@ -31,8 +33,9 @@ def train(params):
     DEVICE = torch.device(params["device"])
     N_WORKERS = params["n_workers"]
 
-    seeds = range(999, 999-N_experiments, -1)
-    train_loader, val_loader, criterions, list_of_encoders, list_of_decoders = set_task(DATASET, BATCH_SIZE, path, N_WORKERS)
+    seeds = range(999, 999 - N_experiments, -1)
+    train_loader, val_loader, criterions, list_of_encoders, list_of_decoders = set_task(DATASET, BATCH_SIZE, path,
+                                                                                        N_WORKERS)
     list_of_methods = params['methods']
 
     for i_exp, i_seed in tqdm(zip(range(N_experiments), seeds)):
@@ -54,21 +57,9 @@ def train(params):
             LEARNING_RATE = LEARNING_RATE_IN
             print(f'{DATASET} training with {method}.')
 
-            start = torch.cuda.Event(enable_timing=True)
-            end = torch.cuda.Event(enable_timing=True)
-
-            torch.cuda.synchronize()
-            start.record()
-
             for i_epoch in tqdm(range(N_EPOCHS)):
-                if (i_epoch > 0) and (i_epoch+1) % N_DROP_LR == 0:
+                if (i_epoch > 0) and (i_epoch + 1) % N_DROP_LR == 0:
                     LEARNING_RATE_IN *= DROP_LR_FACTOR
-
-                start1 = torch.cuda.Event(enable_timing=True)
-                end1 = torch.cuda.Event(enable_timing=True)
-
-                torch.cuda.synchronize()
-                start1.record()
 
                 n_train, n_test = 0, 0
                 if DATASET == "CIFAR-10":
@@ -148,8 +139,8 @@ def train(params):
                     if BACKTRACKING:
                         total_norms2 = calculate_product(grads, new_grads)
                         LEARNING_RATE = backtracking(loss_vector, images, encoders, decoders, criterions,
-                                                    new_grads, enc_output, trues, LEARNING_RATE, GRADIENT, BETA,
-                                                    total_norms1, total_norms2)
+                                                     new_grads, enc_output, trues, LEARNING_RATE, GRADIENT, BETA,
+                                                     total_norms1, total_norms2)
 
                     step_zero(decoders, encoders, LEARNING_RATE, GRADIENT, BACKTRACKING, new_grads)
 
@@ -200,51 +191,39 @@ def train(params):
                     elif DATASET == "Cityscapes":
                         pass
 
-                test_acc = list(map(lambda x: float(x) / n_test, test_acc))
+                test_acc = list(map(lambda x: float(x) / n_test, test_acc)
 
-                end1.record()
-                torch.cuda.synchronize()
-
-                comp_time1 = start1.elapsed_time(end1) / 1000
-
-                wandb.log({"Epoch time": comp_time1})
-
-                for i, acc in enumerate(losses):
-                    wandb.log({f'Test loss. {i}': losses[i].data})
-                    if DATASET != "Cityscapes":
-                        wandb.log({f'Test error. {i}': 1 - test_acc[i]})
+                                for i, acc in enumerate(losses):
+                wandb.log({f'Test loss. {i}': losses[i].data})
+                if DATASET != "Cityscapes":
+                    wandb.log({f'Test error. {i}': 1 - test_acc[i]})
 
                 wandb.log({
                     'Epoch': i_epoch + 1,
                     'Learning rate': LEARNING_RATE,
                     'Iterations': n_iter})
 
-            end.record()
-            torch.cuda.synchronize()
+                if DATASET != "Cityscapes":
+                    for
+                i, acc in enumerate(test_acc):
+                wandb.log({f"Final test error. {i}": 1 - test_acc[i]})
+                wandb.log({f"Final test accuracy. {i}": test_acc[i]})
 
-            comp_time = start.elapsed_time(end) / 1000
+                if __name__ == "__main__":
+                    arg_parser = ArgumentParser()
+                arg_parser.add_argument("path2setup", type=str)
+                arg_parser.add_argument("--device", type=str, default="cpu")
+                arg_parser.add_argument("--n_workers", type=int, default=4)
+                arg_parser.add_argument("--logging", default="false", choices=["true", "false"])
+                args = arg_parser.parse_args()
 
-            wandb.log({"Full time": comp_time})
-            if DATASET != "Cityscapes":
-                for i, acc in enumerate(test_acc):
-                    wandb.log({f"Final test error. {i}": 1 - test_acc[i]})
-                    wandb.log({f"Final test accuracy. {i}": test_acc[i]})
+                with open(args.path2setup, "r") as json_file:
+                    params = json.load(json_file)
+                params["device"] = args.device
+                params["n_workers"] = args.n_workers
+                params["single_task"] = False
 
-if __name__ == "__main__":
-    arg_parser = ArgumentParser()
-    arg_parser.add_argument("path", type=str)
-    arg_parser.add_argument("-device", type=str, default="cpu")
-    arg_parser.add_argument("-n_workers", type=int, default=4)
-    arg_parser.add_argument("-logging", default="false", choices=["true", "false"])
-    args = arg_parser.parse_args()
-
-    with open(args.path, "r") as json_file:
-        params = json.load(json_file)
-        params["device"] = args.device
-        params["n_workers"] = args.n_workers
-        params["single_task"] = False
-
-    if args.logging == "false":
-        os.environ["WANDB_MODE"] = 'disabled'
-        os.environ["WANDB_SILENT"] = "true"
-    train(params)
+                if args.logging == "false":
+                    os.environ["WANDB_MODE"] = 'disabled'
+                os.environ["WANDB_SILENT"] = "true"
+                train(params)

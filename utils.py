@@ -1,18 +1,19 @@
-import wandb
-import torch
-import random
+import functools
 import numpy as np
 import os
-import functools
+import random
+import torch
 import torch.nn.functional as F
 
+from typing import List, Tuple, Callable
 
-def set_seed(seed):
+
+def set_seed(seed: int) -> None:
     """
     Set reproducibility
 
     Args:
-        seed:
+        seed: seed for experiment
 
     Returns:
 
@@ -26,95 +27,36 @@ def set_seed(seed):
     os.environ['PYTHONHASHSEED'] = str(seed)
 
 
-def get_models(params, list_encoders, list_decoders, device):
-    """
-    Initialize neural network modules
-    Args:
-        params:
-        list_encoders:
-        list_decoders:
-        device:
-
-    Returns:
-    Initialized models
-    """
-    encoders, decoders = {}, {}
-    if params['single_task'] == True:
-        for i in range(len(list_encoders)):
-            encoders[f'enc_{i}'] = list_encoders[i]()
-            encoders[f'enc_{i}'].to(device)
-    else:
-        encoders['enc'] = list_encoders[0]()
-        encoders['enc'].to(device)
-
-    for i, dec in enumerate(list_decoders):
-        decoders[i] = list_decoders[i]()
-        decoders[i].to(device)
-
-    return encoders, decoders
-
-def apply_encoders(images, encoders):
-    """
-    Apply encoder to input images
-    Args:
-        images:
-        encoders:
-
-    Returns:
-
-    """
-    enc_outputs = []
-    for e in encoders:
-        Z = encoders[e](images)
-        enc_outputs.append(Z)
-    return enc_outputs
-
-
-def apply_decoders(decoders, enc_outputs, GRADIENT, train=True):
-    """
-    Apply decoder for latent space
-    Args:
-        decoders:
-        enc_outputs:
-        GRADIENT:
-        train:
-
-    Returns:
-
-    """
-    outputs = []
-    t_outputs = []
-    first_calculation = 0
-
-    for i, d in enumerate(decoders):
-        if len(enc_outputs) == 1:
-            if GRADIENT == "dz" and train:
-                if first_calculation == 0:
-                    t = enc_outputs[0].detach().requires_grad_(True)
-                    t_outputs.append(t)
-                    first_calculation = 1
-
-                Y = decoders[d](t)
-            else:
-                Y = decoders[d](enc_outputs[0])
-        else:
-            if GRADIENT == "dz" and train:
-                t = enc_outputs[i].detach().requires_grad_(True)
-                Y = decoders[d](t)
-            else:
-                Y = decoders[d](enc_outputs[i])
-
-            t_outputs.append(t)
-        outputs.append(Y)
-
-    return outputs, t_outputs
-
-
-def backtracking(losses, images, encoders, decoders, criterions,
-                 new_grads, enc_output, trues, t, GRADIENT, BETA,
-                 total_norms1, total_norms2):
+def backtracking(losses: List[torch.Tensor],
+                 images: torch.Tensor,
+                 encoders: List[nn.Module],
+                 decoders: List[nn.Module],
+                 criterions: List[Callable],
+                 new_grads: Tuple[torch.Tensor],
+                 enc_output: List[torch.Tensor],
+                 trues: torch.Tensor,
+                 t: int,
+                 GRADIENT: str,
+                 BETA: float,
+                 total_norms1: float) -> float:
     """
     Implement backtracking procedure
+
+    Args:
+        losses: seed for experiment
+        images: batch of images
+        encoders: encoder models
+        decoders: decoder models
+        criterions: loss functions
+        new_grads: modified gradient direction
+        enc_output: output of encoder models
+        trues: true labels
+        t: int,
+        GRADIENT: type of gradient ('dz' or 'dp')
+        BETA: parameter of Armijo rule
+        total_norms1: norm of decoder parameters,
+    Returns:
+        Optimal step-size
     """
     with torch.no_grad():
         if GRADIENT == "dz":
@@ -152,15 +94,16 @@ def backtracking(losses, images, encoders, decoders, criterions,
     return t
 
 
-def step_norm(decoders, LEARNING_RATE):
+def step_norm(decoders: List[nn.Module],
+              LEARNING_RATE: float) -> np.array:
     """
     Do gradient step and calculate norm of gradient
     Args:
-        decoders:
-        LEARNING_RATE:
+        decoders: decoder models
+        LEARNING_RATE: step-size
 
     Returns:
-
+        Norm of decoder model
     """
     total_norms = []
     for d in decoders:
@@ -168,20 +111,22 @@ def step_norm(decoders, LEARNING_RATE):
         for parameter in decoders[d].parameters():
             if parameter.grad is not None:
                 param_norm = parameter.grad.data.norm(2)
-                parameter.data = parameter.data - LEARNING_RATE*parameter.grad.data
+                parameter.data = parameter.data - LEARNING_RATE * parameter.grad.data
                 total_norm += param_norm.item() ** 2
         total_norms.append(total_norm)
     return np.array(total_norms)
 
-def calculate_product(grads, new_grad):
+
+def calculate_product(grads: Tuple[torch.Tensor],
+                      new_grad: Tuple[torch.Tensor]):
     """
     Calculating scalar product between task gradients and minimizing direction
     Args:
-        grads:
-        new_grad:
+        grads: task gradients
+        new_grad: minimizing direction
 
     Returns:
-
+        Scalar product between direction
     """
     size = len(grads)
     scalar = new_grad[0].new_zeros(size=(size,))
@@ -191,19 +136,25 @@ def calculate_product(grads, new_grad):
 
     return scalar
 
-def step_zero(decoders, encoders, step_size, GRADIENT, BACKTRACKING, grads):
+
+def step_zero(decoders: List[nn.Module],
+              encoders: List[nn.Module],
+              step_size: float,
+              GRADIENT: str,
+              BACKTRACKING: bool,
+              grads: Tuple[torch.Tensor]) -> None:
     """
-    encoder gradient update
+    encoder gradient update and gradient zeroing
     Args:
-        decoders:
-        encoders:
-        step_size:
-        GRADIENT:
-        BACKTRACKING:
-        grads:
+        decoders: decoder models
+        encoders: encoder models
+        step_size: step-size for update
+        GRADIENT: type of gradient ('dz' or 'dp')
+        BACKTRACKING: Set True if you use backtracking
+        grads: gradients
 
     Returns:
-
+        None
     """
     if GRADIENT == "dz":
         for i_par, parameter in enumerate(encoders['enc'].parameters()):
@@ -228,17 +179,18 @@ def step_zero(decoders, encoders, step_size, GRADIENT, BACKTRACKING, grads):
                 parameter.grad.data.zero_()
 
 
-
-def calculate_losses(criterions, outputs, trues):
+def calculate_losses(criterions: List[Callable],
+                     outputs: List[torch.Tensor],
+                     trues: List[torch.Tensor]) -> List[torch.Tensor]:
     """
     Calculating task losses
     Args:
-        criterions:
-        outputs:
-        trues:
+        criterions: loss functions
+        outputs: output of models
+        trues: true labels
 
     Returns:
-
+        List of tensors
     """
     losses = []
     for i, criterion in enumerate(criterions):
@@ -247,14 +199,17 @@ def calculate_losses(criterions, outputs, trues):
     return losses
 
 
-def calculate_predictions(outputs, trues, n, acc):
+def calculate_predictions(outputs: List[torch.Tensor],
+                          trues: List[torch.Tensor],
+                          n: int,
+                          acc: float):
     """
     Calculating task predictions
     Args:
-        outputs:
-        trues:
-        n:
-        acc:
+        outputs: output of models
+        trues: true labels
+        n: number of elements
+        acc: current accuracy
 
     Returns:
 
@@ -331,7 +286,6 @@ def l1_loss_instance(input, target, val=False):
 
 
 def partialclass(cls, *args, **kwds):
-
     class NewCls(cls):
         __init__ = functools.partialmethod(cls.__init__, *args, **kwds)
 

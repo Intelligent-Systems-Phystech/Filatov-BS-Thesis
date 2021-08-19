@@ -1,5 +1,7 @@
-import torch
 import numpy as np
+import torch
+from typing import Tuple
+
 
 class MinNormSolver():
     """
@@ -27,11 +29,12 @@ class MinNormSolver():
             cost = v2v2
             return gamma, cost
         # Case: Fig 1, second column
-        gamma = -1.0 * ( (v1v2 - v2v2) / (v1v1+v2v2 - 2*v1v2) )
-        cost = v2v2 + gamma*(v1v2 - v2v2)
+        gamma = -1.0 * ((v1v2 - v2v2) / (v1v1 + v2v2 - 2 * v1v2))
+        cost = v2v2 + gamma * (v1v2 - v2v2)
         return gamma, cost
 
-    def _min_norm_2d(vecs, dps):
+    def _min_norm_2d(vecs: Tuple[torch.Tensor],
+                     dps: np.array):
         """
         Find the minimum norm solution as combination of two points
         This is correct only in 2D
@@ -39,27 +42,27 @@ class MinNormSolver():
         """
         dmin = 1e8
         for i in range(len(vecs)):
-            for j in range(i+1,len(vecs)):
-                if (i,j) not in dps:
+            for j in range(i + 1, len(vecs)):
+                if (i, j) not in dps:
                     dps[(i, j)] = 0.0
                     for k in range(len(vecs[i])):
-                        dps[(i,j)] += torch.mul(vecs[i][k], vecs[j][k]).sum().data
+                        dps[(i, j)] += torch.mul(vecs[i][k], vecs[j][k]).sum().data
                     dps[(j, i)] = dps[(i, j)]
-                if (i,i) not in dps:
+                if (i, i) not in dps:
                     dps[(i, i)] = 0.0
                     for k in range(len(vecs[i])):
-                        dps[(i,i)] += torch.mul(vecs[i][k], vecs[i][k]).sum().data
-                if (j,j) not in dps:
+                        dps[(i, i)] += torch.mul(vecs[i][k], vecs[i][k]).sum().data
+                if (j, j) not in dps:
                     dps[(j, j)] = 0.0
                     for k in range(len(vecs[i])):
                         dps[(j, j)] += torch.mul(vecs[j][k], vecs[j][k]).sum().data
-                c,d = MinNormSolver._min_norm_element_from2(dps[(i,i)], dps[(i,j)], dps[(j,j)])
+                c, d = MinNormSolver._min_norm_element_from2(dps[(i, i)], dps[(i, j)], dps[(j, j)])
                 if d < dmin:
                     dmin = d
-                    sol = [(i,j),c,d]
+                    sol = [(i, j), c, d]
         return sol, dps
 
-    def find_min_norm_element_FW(vecs):
+    def find_min_norm_element_FW(vecs: Tuple[torch.Tensor]) -> Tuple[torch.Tensor]:
         """
         Given a list of vectors (vecs), this method finds the minimum norm element in the convex hull
         as min |u|_2 st. u = \sum c_i vecs[i] and \sum c_i = 1.
@@ -70,21 +73,21 @@ class MinNormSolver():
         dps = {}
         init_sol, dps = MinNormSolver._min_norm_2d(vecs, dps)
 
-        n=len(vecs)
+        n = len(vecs)
         sol_vec = np.zeros(n)
         sol_vec[init_sol[0][0]] = init_sol[1]
         sol_vec[init_sol[0][1]] = 1 - init_sol[1]
 
         if n < 3:
             # This is optimal for n=2, so return the solution
-            return sol_vec , init_sol[2]
+            return sol_vec, init_sol[2]
 
         iter_count = 0
 
-        grad_mat = np.zeros((n,n))
+        grad_mat = np.zeros((n, n))
         for i in range(n):
             for j in range(n):
-                grad_mat[i,j] = dps[(i, j)]
+                grad_mat[i, j] = dps[(i, j)]
 
         while iter_count < MinNormSolver.MAX_ITER:
             t_iter = np.argmin(np.dot(grad_mat, sol_vec))
@@ -94,7 +97,7 @@ class MinNormSolver():
             v2v2 = grad_mat[t_iter, t_iter]
 
             nc, nd = MinNormSolver._min_norm_element_from2(v1v1, v1v2, v2v2)
-            new_sol_vec = nc*sol_vec
+            new_sol_vec = nc * sol_vec
             new_sol_vec[t_iter] += 1 - nc
 
             change = new_sol_vec - sol_vec
@@ -103,14 +106,15 @@ class MinNormSolver():
             sol_vec = new_sol_vec
 
 
-def gradient_normalization(normalization_type, grads):
+def gradient_normalization(normalization_type: str,
+                           grads: Tuple[torch.Tensor]) -> Tuple[torch.Tensor]:
     """
 
     Args:
         normalization_type: l1 or l2
         grads: tuple of task grddients
 
-    Returns:
+    Returns: Normalized grads
 
     """
     gn = {}
@@ -126,34 +130,17 @@ def gradient_normalization(normalization_type, grads):
     return grads, gn
 
 
-def change_gradient(method, grads):
+def change_gradient(method: str,
+                    grads: Tuple[torch.Tensor]) -> Tuple[torch.Tensor]:
     """
 
     Args:
         method: MGDA or EDM
         grads: tuple of task gradients
 
-    Returns:
+    Returns: MGDA or EDM direction
 
     """
-    # grads1, grads2 = grads
-    # g1 = torch.nn.utils.parameters_to_vector(grads1)
-    # g2 = torch.nn.utils.parameters_to_vector(grads2)
-
-    # wandb.log({'g1 norm': torch.norm(g1),
-    #            'g2 norm': torch.norm(g2),
-    #            'cos'  : torch.cosine_similarity(g1, g2, dim=0)})
-
-    # if method == 'MGDA':
-    #     coefs = altitude_direction(grads)
-
-    # if method == 'PC':
-    #     g = pcgrad_direction(g1, g2)
-    # elif 'NORM' in method:
-    #     NORM = int(method.split('_')[1])
-    #     g = norm_direction(g1, g2, NORM)
-    # elif method == 'EDM':
-    #     g = bisection_direction(g1, g2)
     if method == "MGDA":
         prom_grads = grads
 
@@ -166,6 +153,4 @@ def change_gradient(method, grads):
         prom = tuple(map(lambda x: x * sol[i], grads[i]))
         g = tuple(map(lambda x, y: x + y, g, prom))
 
-    # wandb.log({'h norm': torch.norm(g)})
-    # torch.nn.utils.vector_to_parameters(g, grads)
     return g

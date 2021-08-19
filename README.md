@@ -1,4 +1,4 @@
-# Filatov-BS-Thesis
+# Fast line search for multi-task learning
 
 Требования содержатся в файле `requirements.txt`  
 Использование для обучения `python train.py mnist.json" -device "cuda:0"`  

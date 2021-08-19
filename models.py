@@ -1,9 +1,12 @@
+import math
+import os
+import sys
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import os
-import math
-import sys
+
+from typing import List, Union
+
 try:
     from urllib import urlretrieve
 except ImportError:
@@ -14,10 +17,104 @@ model_urls = {
     'resnet101': 'http://sceneparsing.csail.mit.edu/model/pretrained_resnet/resnet101-imagenet.pth'
 }
 
+
+def get_models(params: dict,
+               list_encoders: List[nn.Module],
+               list_decoders: List[nn.Module],
+               device: torch.device) -> Union[List, List]:
+    """
+    Initialize neural network modules
+    Args:
+        params: parameters of training
+        list_encoders: encoder models
+        list_decoders: decoder models
+        device: device for training
+
+    Returns:
+    Initialized models
+    """
+    encoders, decoders = {}, {}
+    if params['single_task'] == True:
+        for i in range(len(list_encoders)):
+            encoders[f'enc_{i}'] = list_encoders[i]()
+            encoders[f'enc_{i}'].to(device)
+    else:
+        encoders['enc'] = list_encoders[0]()
+        encoders['enc'].to(device)
+
+    for i, dec in enumerate(list_decoders):
+        decoders[i] = list_decoders[i]()
+        decoders[i].to(device)
+
+    return encoders, decoders
+
+
+def apply_encoders(images: torch.Tensor,
+                   encoders: List[nn.Module]):
+    """
+    Apply encoder to input images
+    Args:
+        images: batch of images
+        encoders: encoder models
+
+    Returns:
+        Output of encoder models
+    """
+    enc_outputs = []
+    for e in encoders:
+        Z = encoders[e](images)
+        enc_outputs.append(Z)
+    return enc_outputs
+
+
+def apply_decoders(decoders: List[nn.Module],
+                   enc_outputs: List[torch.Tensor],
+                   GRADIENT: str,
+                   train: bool = True):
+    """
+    Apply decoder for latent space
+    Args:
+        decoders: decoder models
+        enc_outputs: output of encoder models
+        GRADIENT: type of gradient ('dz' or 'dp')
+        train: different type of gradient calculation
+
+    Returns:
+
+    """
+    outputs = []
+    t_outputs = []
+    first_calculation = 0
+
+    for i, d in enumerate(decoders):
+        if len(enc_outputs) == 1:
+            if GRADIENT == "dz" and train:
+                if first_calculation == 0:
+                    t = enc_outputs[0].detach().requires_grad_(True)
+                    t_outputs.append(t)
+                    first_calculation = 1
+
+                Y = decoders[d](t)
+            else:
+                Y = decoders[d](enc_outputs[0])
+        else:
+            if GRADIENT == "dz" and train:
+                t = enc_outputs[i].detach().requires_grad_(True)
+                Y = decoders[d](t)
+            else:
+                Y = decoders[d](enc_outputs[i])
+
+            t_outputs.append(t)
+        outputs.append(Y)
+
+    return outputs, t_outputs
+
+
 class MultiLeNetEnc(nn.Module):
     """
     Le-Net-5 Encoder
     """
+
     def __init__(self, use_norm=True):
         super().__init__()
         self.conv1 = nn.Conv2d(1, 10, kernel_size=5)
@@ -49,6 +146,7 @@ class MultiLeNetDec(nn.Module):
     """
     Le-Net Decoder
     """
+
     def __init__(self):
         super().__init__()
         self.fc1 = nn.Linear(50, 50)
@@ -61,10 +159,12 @@ class MultiLeNetDec(nn.Module):
         x = self.fc2(x)
         return F.log_softmax(x, dim=1)
 
+
 class MultiDec(nn.Module):
     """
     Decoder for CIFAR10
     """
+
     def __init__(self):
         super(MultiDec, self).__init__()
         self.linear1 = nn.Linear(512, 256)
@@ -74,6 +174,7 @@ class MultiDec(nn.Module):
         x = F.relu(self.linear1(x))
         x = self.linear2(x)
         return x
+
 
 class BasicBlock(nn.Module):
     """
@@ -91,11 +192,11 @@ class BasicBlock(nn.Module):
         self.bn2 = nn.BatchNorm2d(planes)
 
         self.shortcut = nn.Sequential()
-        if stride != 1 or in_planes != self.expansion*planes:
+        if stride != 1 or in_planes != self.expansion * planes:
             self.shortcut = nn.Sequential(
-                nn.Conv2d(in_planes, self.expansion*planes,
+                nn.Conv2d(in_planes, self.expansion * planes,
                           kernel_size=1, stride=stride, bias=False),
-                nn.BatchNorm2d(self.expansion*planes)
+                nn.BatchNorm2d(self.expansion * planes)
             )
 
     def forward(self, x):
@@ -105,10 +206,12 @@ class BasicBlock(nn.Module):
         out = F.relu(out)
         return out
 
+
 class ResNetCIFAR(nn.Module):
     """
     Res-Net-18 for CIFAR10
     """
+
     def __init__(self, block, num_blocks):
         super(ResNetCIFAR, self).__init__()
         self.in_planes = 64
@@ -122,7 +225,7 @@ class ResNetCIFAR(nn.Module):
         self.layer4 = self._make_layer(block, 512, num_blocks[3], stride=2)
 
     def _make_layer(self, block, planes, num_blocks, stride):
-        strides = [stride] + [1]*(num_blocks-1)
+        strides = [stride] + [1] * (num_blocks - 1)
         layers = []
         for stride in strides:
             layers.append(block(self.in_planes, planes, stride))
@@ -139,6 +242,7 @@ class ResNetCIFAR(nn.Module):
         out = out.view(out.size(0), -1)
         return out
 
+
 class Bottleneck(nn.Module):
     """
     Bottleneck for Res-Net
@@ -153,7 +257,7 @@ class Bottleneck(nn.Module):
                                padding=1, bias=False)
         self.bn2 = nn.BatchNorm2d(int(planes))
         self.conv3 = nn.Conv2d(planes, planes * 4, kernel_size=1, bias=False)
-        self.bn3 = nn.BatchNorm2d(int(planes)*4)
+        self.bn3 = nn.BatchNorm2d(int(planes) * 4)
         self.relu = nn.ReLU(inplace=True)
         self.downsample = downsample
         self.stride = stride
@@ -212,7 +316,7 @@ class ResNet(nn.Module):
             downsample = nn.Sequential(
                 nn.Conv2d(self.inplanes, planes * block.expansion,
                           kernel_size=1, stride=stride, bias=False),
-                nn.BatchNorm2d(int(planes)*block.expansion),
+                nn.BatchNorm2d(int(planes) * block.expansion),
             )
 
         layers = []
@@ -238,8 +342,10 @@ class ResNet(nn.Module):
 
         return x
 
+
 def ResNet18():
     return ResNetCIFAR(BasicBlock, [2, 2, 2, 2])
+
 
 def resnet50(pretrained=False, **kwargs):
     """Constructs a ResNet-50 model.

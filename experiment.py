@@ -1,21 +1,23 @@
 import torch
-import numpy as np
-import random
-import os
 import wandb
+from typing import Union, List
 
-from models import MultiDec, MultiLeNetDec, MultiLeNetEnc, SegmentationDecoder, get_segmentation_encoder, ResNet18
-from utils import cross_entropy2d, l1_loss_instance, l1_loss_depth, partialclass, set_seed
 from loaders import Compose, RandomRotate, RandomHorizontallyFlip, global_transformer
 from loaders import MNIST, CITYSCAPES, CIFAR10Loader
+from models import MultiDec, MultiLeNetDec, MultiLeNetEnc, SegmentationDecoder, get_segmentation_encoder, ResNet18
+from utils import cross_entropy2d, l1_loss_instance, l1_loss_depth, partialclass, set_seed
 
-def set_task(DATASET, BATCH_SIZE, path, N_WORKERS):
+
+def set_task(DATASET: str,
+             BATCH_SIZE: int,
+             path: str,
+             N_WORKERS: int) -> Union[Dataloader, Dataloader, List, List, List]:
     """
     Setting task parameters
     Args:
         DATASET: Dataset name
         BATCH_SIZE: training batch size
-        path: path to dataset
+        path: path to dataset folder
         N_WORKERS: num workers
 
     Returns:
@@ -39,7 +41,8 @@ def set_task(DATASET, BATCH_SIZE, path, N_WORKERS):
 
     elif DATASET == "MNIST":
         train_dst = MNIST(root=path, train=True, download=True, transform=global_transformer(), multi=True)
-        train_loader = torch.utils.data.DataLoader(train_dst, batch_size=BATCH_SIZE, shuffle=True, num_workers=N_WORKERS)
+        train_loader = torch.utils.data.DataLoader(train_dst, batch_size=BATCH_SIZE, shuffle=True,
+                                                   num_workers=N_WORKERS)
 
         val_dst = MNIST(root=path, train=False, download=True, transform=global_transformer(), multi=True)
         val_loader = torch.utils.data.DataLoader(val_dst, batch_size=BATCH_SIZE, num_workers=N_WORKERS)
@@ -55,7 +58,8 @@ def set_task(DATASET, BATCH_SIZE, path, N_WORKERS):
 
         train_dst = CITYSCAPES(root=path, is_transform=True, split=['train'],
                                img_size=(img_rows, img_cols), augmentations=cityscapes_augmentations)
-        train_loader = torch.utils.data.DataLoader(train_dst, batch_size=BATCH_SIZE, shuffle=True, num_workers=N_WORKERS)
+        train_loader = torch.utils.data.DataLoader(train_dst, batch_size=BATCH_SIZE, shuffle=True,
+                                                   num_workers=N_WORKERS)
 
         val_dst = CITYSCAPES(root=path, split=['val'], img_size=(img_rows, img_cols))
         val_loader = torch.utils.data.DataLoader(val_dst, batch_size=BATCH_SIZE, num_workers=N_WORKERS)
@@ -69,13 +73,16 @@ def set_task(DATASET, BATCH_SIZE, path, N_WORKERS):
     return train_loader, val_loader, criterions, list_of_encoders, list_of_decoders
 
 
-def init_wandb_log(method, i_seed, group, params):
+def init_wandb_log(method: str,
+                   i_seed: int,
+                   group: str,
+                   params: dict) -> None:
     """
     Initializing parameters for wandb logging
     Args:
         method: method for finding optimal direction
         i_seed: seed of experiment
-        group: experiment group
+        group: name of experiment group for logging
         params: dictionary with all parameters
     """
     WANDB_NAME, N_EPOCHS, N_DROP_LR = params["WANDB_NAME"], params["N_EPOCHS"], params["N_DROP_LR"]
@@ -83,12 +90,12 @@ def init_wandb_log(method, i_seed, group, params):
     DATASET, LEARNING_RATE_IN, GRADIENT = params["DATASET"], params["LEARNING_RATE_IN"], params["GRADIENT"]
     entity = params["entity"]
     wandb.init(entity=entity, project=WANDB_NAME, name=method, group=group)
-    wandb.config.n_epochs       = N_EPOCHS
-    wandb.config.n_drop_lr      = N_DROP_LR
+    wandb.config.n_epochs = N_EPOCHS
+    wandb.config.n_drop_lr = N_DROP_LR
     wandb.config.drop_lr_factor = DROP_LR_FACTOR
-    wandb.config.batch_size     = BATCH_SIZE
-    wandb.config.initial_lr     = LEARNING_RATE_IN
-    wandb.config.beta           = BETA
-    wandb.config.grad           = GRADIENT
-    wandb.config.dataset        = DATASET
-    wandb.config.seed           = i_seed
+    wandb.config.batch_size = BATCH_SIZE
+    wandb.config.initial_lr = LEARNING_RATE_IN
+    wandb.config.beta = BETA
+    wandb.config.grad = GRADIENT
+    wandb.config.dataset = DATASET
+    wandb.config.seed = i_seed
