@@ -1,6 +1,0 @@
-.idea
-.ipynb_checkpoints
-*.pyc
-Results
-*.csv
-*.zip
