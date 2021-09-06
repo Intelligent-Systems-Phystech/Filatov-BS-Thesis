@@ -79,8 +79,12 @@ def train(params):
                 for batch in train_loader:
                     n_iter += 1
                     LEARNING_RATE = LEARNING_RATE_IN
-                    images, trues = batch
-                    images = images.to(DEVICE)
+                    if DATASET == 'NLP':
+                        batch = batch[0]
+                        batch.to(DEVICE)
+                    else:
+                        images, trues = batch
+                        images = images.to(DEVICE)
 
                     if DATASET == "CIFAR-10":
                         trues = trues.T.unsqueeze(2).to(DEVICE)
@@ -90,8 +94,14 @@ def train(params):
                     elif DATASET == "Cityscapes":
                         for i in range(len(trues)):
                             trues[i] = trues[i].to(DEVICE)
+                    elif DATASET == "NLP":
+                        pass
 
-                    enc_output = apply_encoders(images, encoders)
+                    if DATASET == "NLP":
+                        enc_output = [encoders[0].encoder.encode(input_ids=batch.input_ids, segment_ids=batch.segment_ids, input_mask=batch.input_mask).pooled]
+                    else:
+                        enc_output = apply_encoders(images, encoders)
+
                     if GRADIENT == "dz":
                         outputs, t_outputs = apply_decoders(decoders, enc_output, GRADIENT, train=True)
                     else:
@@ -179,7 +189,10 @@ def train(params):
                         for i in range(len(trues)):
                             trues[i] = trues[i].to(DEVICE)
 
-                    enc_output = apply_encoders(images, encoders)
+                    if DATASET == "NLP":
+                        enc_output = [encoders[0].encoder.encode(input_ids=batch.input_ids, segment_ids=batch.segment_ids, input_mask=batch.input_mask).pooled]
+                    else:
+                        enc_output = apply_encoders(images, encoders)
                     outputs, _ = apply_decoders(decoders, enc_output, GRADIENT, train=False)
                     # Task-specific losses
 
@@ -193,8 +206,8 @@ def train(params):
 
                 test_acc = list(map(lambda x: float(x) / n_test, test_acc)
 
-                                for i, acc in enumerate(losses):
-                wandb.log({f'Test loss. {i}': losses[i].data})
+                for i, acc in enumerate(losses):
+                    wandb.log({f'Test loss. {i}': losses[i].data})
                 if DATASET != "Cityscapes":
                     wandb.log({f'Test error. {i}': 1 - test_acc[i]})
 
@@ -204,26 +217,25 @@ def train(params):
                     'Iterations': n_iter})
 
                 if DATASET != "Cityscapes":
-                    for
-                i, acc in enumerate(test_acc):
-                wandb.log({f"Final test error. {i}": 1 - test_acc[i]})
-                wandb.log({f"Final test accuracy. {i}": test_acc[i]})
+                    for i, acc in enumerate(test_acc):
+                        wandb.log({f"Final test error. {i}": 1 - test_acc[i]})
+                        wandb.log({f"Final test accuracy. {i}": test_acc[i]})
 
                 if __name__ == "__main__":
                     arg_parser = ArgumentParser()
-                arg_parser.add_argument("path2setup", type=str)
-                arg_parser.add_argument("--device", type=str, default="cpu")
-                arg_parser.add_argument("--n_workers", type=int, default=4)
-                arg_parser.add_argument("--logging", default="false", choices=["true", "false"])
-                args = arg_parser.parse_args()
+                    arg_parser.add_argument("path2setup", type=str)
+                    arg_parser.add_argument("--device", type=str, default="cpu")
+                    arg_parser.add_argument("--n_workers", type=int, default=4)
+                    arg_parser.add_argument("--logging", default="false", choices=["true", "false"])
+                    args = arg_parser.parse_args()
 
-                with open(args.path2setup, "r") as json_file:
-                    params = json.load(json_file)
-                params["device"] = args.device
-                params["n_workers"] = args.n_workers
-                params["single_task"] = False
+                    with open(args.path2setup, "r") as json_file:
+                        params = json.load(json_file)
+                    params["device"] = args.device
+                    params["n_workers"] = args.n_workers
+                    params["single_task"] = False
 
-                if args.logging == "false":
-                    os.environ["WANDB_MODE"] = 'disabled'
-                os.environ["WANDB_SILENT"] = "true"
-                train(params)
+                    if args.logging == "false":
+                        os.environ["WANDB_MODE"] = 'disabled'
+                        os.environ["WANDB_SILENT"] = "true"
+                    train(params)

@@ -290,3 +290,8 @@ def partialclass(cls, *args, **kwds):
         __init__ = functools.partialmethod(cls.__init__, *args, **kwds)
 
     return NewCls
+
+def reset_model(model):
+    for layer in model.children():
+        if hasattr(layer, 'reset_parameters'):
+            layer.reset_parameters()

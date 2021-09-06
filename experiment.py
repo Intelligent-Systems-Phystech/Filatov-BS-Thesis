@@ -1,11 +1,20 @@
 import torch
 import wandb
-from typing import Union, List
 
+import jiant.proj.main.tokenize_and_cache as tokenize_and_cache
+import jiant.proj.main.export_model as export_model
+import jiant.proj.main.scripts.configurator as configurator
+import jiant.proj.main.components.container_setup as container_setup
+import jiant.shared.caching as caching
+import jiant.proj.main.modeling.model_setup as jiant_model_setup
+import os
+
+from typing import Union, List
+from copy import deepcopy
 from loaders import Compose, RandomRotate, RandomHorizontallyFlip, global_transformer
 from loaders import MNIST, CITYSCAPES, CIFAR10Loader
 from models import MultiDec, MultiLeNetDec, MultiLeNetEnc, SegmentationDecoder, get_segmentation_encoder, ResNet18
-from utils import cross_entropy2d, l1_loss_instance, l1_loss_depth, partialclass, set_seed
+from utils import cross_entropy2d, l1_loss_instance, l1_loss_depth, partialclass, set_seed, reset_model
 
 
 def set_task(DATASET: str,
@@ -69,6 +78,58 @@ def set_task(DATASET: str,
                             partialclass(SegmentationDecoder, num_class=2, task_type="R"),
                             partialclass(SegmentationDecoder, num_class=1, task_type="R")]
         criterions = [cross_entropy2d, l1_loss_instance, l1_loss_depth]
+    
+    elif DATASET == 'NLP':
+
+        export_model.export_model(
+            hf_pretrained_model_name_or_path="bert-base-uncased",
+            output_base_path="./models/bert-base-uncased",
+        )
+
+        for task_name in ["rte", "stsb", "commonsenseqa"]:
+            tokenize_and_cache.main(tokenize_and_cache.RunConfiguration(
+                task_config_path=f"./tasks/configs/{task_name}_config.json",
+                hf_pretrained_model_name_or_path="bert-base-uncased",
+                output_dir=f"./cache/{task_name}",
+                phases=["train", "val"],
+            ))
+
+        jiant_run_config = configurator.SimpleAPIMultiTaskConfigurator(
+            task_config_base_path="./tasks/configs",
+            task_cache_base_path="./cache",
+            train_task_name_list=["rte", "stsb", "commonsenseqa"],
+            val_task_name_list=["rte", "stsb", "commonsenseqa"],
+            train_batch_size=4,
+            eval_batch_size=8,
+            epochs=0.5,
+            num_gpus=1,
+        ).create_config()
+
+        jiant_task_container = container_setup.create_jiant_task_container_from_dict(jiant_run_config)
+
+        jiant_model = jiant_model_setup.setup_jiant_model(
+            hf_pretrained_model_name_or_path="bert-base-uncased",
+            model_config_path="./models/bert-base-uncased/model/config.json",
+            task_dict=jiant_task_container.task_dict,
+            taskmodels_config=jiant_task_container.taskmodels_config,
+        )
+
+        train_cache = jiant_task_container.task_cache_dict['stsb']["train"]
+        val_cache = jiant_task_container.task_cache_dict['stsb']["val"]
+
+        train_dataloader = get_train_dataloader_from_cache(train_cache, task, 4)
+        val_dataloader = get_eval_dataloader_from_cache(val_cache, task, 4)
+
+        list_of_encoders = [jiant_model.encoder]
+        decoder1 = deepcopy(jiant_model.taskmodels_dict['stsb'].head)
+        reset(decoder1)
+        decoder2 = deepcopy(decoder1)
+        reset(decoder2)
+        decoder3 = deepcopy(decoder2)
+        reset(decoder3)
+
+        list_of_decoders = [lambda: decoder1, lambda: decoder2, lambda: decoder3]
+        criterions = [torch.nn.MSELoss(), torch.nn.MSELoss(), torch.nn.MSELoss()]
 
     return train_loader, val_loader, criterions, list_of_encoders, list_of_decoders
 
